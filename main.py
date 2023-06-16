@@ -1,5 +1,5 @@
 from requests import get
-import selectorlib
+from bs4 import BeautifulSoup
 
 URL = "https://www.songkick.com/metro-areas/29403-india-bangalore"
 
@@ -24,5 +24,28 @@ def scrape(url=URL):
     return source
 
 
+def extract(source):
+    """
+    Returns a list of upcoming events
+
+    Parameters
+    ----------
+    source : str
+        The source-code of the webpage
+
+    Returns
+    -------
+    list
+        List of lists each containing event name, venue and timing
+    """
+    soup = BeautifulSoup(source, "html.parser")
+    events = soup.find_all("strong")
+    venues = soup.find_all("a", {"class": "venue-link"})
+    timings = soup.find_all("time")
+    timings = [timing.text for timing in timings if timing.text != ""]
+    return [[event.text, venue.text, timing] for event, venue, timing in zip(events, venues, timings)]
+
+
 if __name__ == "__main__":
-    help(scrape)
+    scrapped = scrape(URL)
+    print(extract(scrapped))
