@@ -41,9 +41,9 @@ def extract(source):
     soup = BeautifulSoup(source, "html.parser")
     events = soup.find_all("strong")
     venues = soup.find_all("a", {"class": "venue-link"})
-    timings = soup.find_all("time")
-    timings = [timing.text for timing in timings if timing.text != ""]
-    return [[event.text, venue.text, timing] for event, venue, timing in zip(events, venues, timings)]
+    dates = soup.find_all("time")
+    dates = [date.text for date in dates if date.text != ""]
+    return [[event.text, venue.text, date] for event, venue, date in zip(events, venues, dates)]
 
 
 if __name__ == "__main__":
