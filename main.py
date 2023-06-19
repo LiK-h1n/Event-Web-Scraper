@@ -2,6 +2,9 @@ from requests import get
 from bs4 import BeautifulSoup
 from csv import writer
 from pandas import read_csv
+from smtplib import SMTP
+from os import getenv
+from email.message import EmailMessage
 
 URL = "https://www.songkick.com/metro-areas/29403-india-bangalore"
 
@@ -45,11 +48,33 @@ def extract(source):
     venues = soup.find_all("a", {"class": "venue-link"})
     dates = soup.find_all("time")
     dates = [date.text for date in dates if date.text != ""]
-    return [[name.text, venue.text, date] for name, venue, date in zip(names, venues, dates)]
+    links = soup.find_all("a", {"class": "event-link chevron-wrapper"})
+    return [[name.text, venue.text, date, f"https://www.songkick.com{link['href']}"] for name, venue, date, link in zip(names, venues, dates, links)]
 
 
-def send_email():
-    print("Email was sent!")
+def send_email(content):
+    """
+        Sends an email consisting of upcoming events
+
+        Parameters
+        ----------
+        content : str
+            The message content that the email contains
+    """
+    message = EmailMessage()
+    message["Subject"] = "Upcoming Events"
+    message.set_content(content)
+
+    sender = getenv("EMAIL")
+    password = getenv("PASSWORD")
+
+    gmail = SMTP("smtp.gmail.com", 587)
+    gmail.ehlo()
+    gmail.starttls()
+    gmail.login(sender, password)
+    gmail.sendmail(sender, sender, message.as_string())
+    gmail.quit()
+    print("Email was sent")
 
 
 def store(row):
@@ -79,11 +104,22 @@ def read():
 
 
 if __name__ == "__main__":
-    scrapped = scrape(URL)
-    events = extract(scrapped)
-    content = read()
+    while True:
+        scrapped = scrape(URL)
+        events = extract(scrapped)
+        stored = read()
 
-    if len(events) != 0:
-        for event in events:
-            if event not in content.values.tolist():
-                store(event)
+        event_stored = False
+        if len(events) != 0:
+            for event in events:
+                if event not in stored.values.tolist():
+                    store(event)
+                    event_stored = True
+
+            stored = read()
+            if event_stored:
+                message_content = ""
+                for index, row in stored.iterrows():
+                    message_content += f"{row['Name']}\n{row['Venue']}, {row['Date']}\n{row['Link']}\n\n"
+
+                send_email(message_content)
