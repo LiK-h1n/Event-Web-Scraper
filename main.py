@@ -1,10 +1,12 @@
 from requests import get
 from bs4 import BeautifulSoup
+from csv import writer
+from pandas import read_csv
 
 URL = "https://www.songkick.com/metro-areas/29403-india-bangalore"
 
 
-def scrape(url=URL):
+def scrape(url):
     """
     Scrapes the website's view-source from the URL
 
@@ -39,13 +41,49 @@ def extract(source):
         List of lists each containing event name, venue and timing
     """
     soup = BeautifulSoup(source, "html.parser")
-    events = soup.find_all("strong")
+    names = soup.find_all("strong")
     venues = soup.find_all("a", {"class": "venue-link"})
     dates = soup.find_all("time")
     dates = [date.text for date in dates if date.text != ""]
-    return [[event.text, venue.text, date] for event, venue, date in zip(events, venues, dates)]
+    return [[name.text, venue.text, date] for name, venue, date in zip(names, venues, dates)]
+
+
+def send_email():
+    print("Email was sent!")
+
+
+def store(row):
+    """
+        Stores a provided row into the csv file
+
+        Parameters
+        ----------
+        row : list
+            The row that has to be stored
+    """
+    with open("data.csv", "a", encoding="utf-8") as file:
+        wrt = writer(file, lineterminator="\n")
+        wrt.writerow(row)
+
+
+def read():
+    """
+        Reads the csv file and returns it as a DataFrame
+
+        Returns
+        -------
+        DataFrame
+            DataFrame containing event details
+    """
+    return read_csv("data.csv")
 
 
 if __name__ == "__main__":
     scrapped = scrape(URL)
-    print(extract(scrapped))
+    events = extract(scrapped)
+    content = read()
+
+    if len(events) != 0:
+        for event in events:
+            if event not in content.values.tolist():
+                store(event)
