@@ -1,13 +1,13 @@
 from requests import get
 from bs4 import BeautifulSoup
-from csv import writer
-from pandas import read_csv
 from smtplib import SMTP
 from os import getenv
 from email.message import EmailMessage
+import sqlite3 as sql
 
 URL = "https://www.songkick.com/metro-areas/29403-india-bangalore"
-CSV_PATH = "data.csv"
+
+connection = sql.connect("data.db")
 
 
 def scrape(url):
@@ -42,10 +42,10 @@ def extract(source):
     Returns
     -------
     list
-        List of lists each containing event name, venue and timing
+        List of lists each containing event name, venue, timing and link
     """
     soup = BeautifulSoup(source, "html.parser")
-    names = soup.find_all("strong")
+    names = soup.find_all("strong", {"class": None})
     venues = soup.find_all("a", {"class": "venue-link"})
     dates = soup.find_all("time")
     dates = [date.text for date in dates if date.text != ""]
@@ -80,28 +80,45 @@ def send_email(content):
 
 def store(row):
     """
-        Stores a provided row into the csv file
+        Stores a provided row into the database
 
         Parameters
         ----------
-        row : list
+        row : tuple
             The row that has to be stored
     """
-    with open(CSV_PATH, "a", encoding="utf-8") as file:
-        wrt = writer(file, lineterminator="\n")
-        wrt.writerow(row)
+    cursor = connection.cursor()
+    cursor.execute("INSERT INTO Event VALUES(?,?,?,?)", row)
+    connection.commit()
 
 
 def read():
     """
-        Reads the csv file and returns it as a DataFrame
+        Reads the database and returns it's rows
 
         Returns
         -------
-        DataFrame
-            DataFrame containing event details
+        rows : list
+            List containing rows as tuples
     """
-    return read_csv(CSV_PATH)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM Event")
+    rows = cursor.fetchall()
+    return rows
+
+
+def delete(row):
+    """
+        Deletes the provided row from the database
+
+        Parameters
+        ----------
+        row : tuple
+            The row that has to be deleted
+    """
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM Event WHERE Name=? AND Venue=? AND Date=? AND Link=?", row)
+    connection.commit()
 
 
 if __name__ == "__main__":
@@ -110,22 +127,21 @@ if __name__ == "__main__":
         upcoming_events = extract(scrapped)
         stored_events = read()
 
-        for index, event in enumerate(stored_events.values.tolist()):
-            if event not in upcoming_events:
-                stored_events.drop(index, inplace=True)
-        stored_events.to_csv(CSV_PATH, index=False)
+        for event in stored_events:
+            if list(event) not in upcoming_events:
+                delete(event)
 
         event_stored = False
         if len(upcoming_events) != 0:
             for event in upcoming_events:
-                if event not in stored_events.values.tolist():
+                if tuple(event) not in stored_events:
                     store(event)
                     event_stored = True
 
             stored_events = read()
             if event_stored:
                 message_content = ""
-                for index, row in stored_events.iterrows():
-                    message_content += f"{row['Name']}\n{row['Venue']}, {row['Date']}\n{row['Link']}\n\n"
+                for event in stored_events:
+                    message_content += f"{event[0]}\n{event[1]}, {event[2]}\n{event[3]}\n\n"
 
                 send_email(message_content)
